@@ -1,0 +1,408 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_PWMServoDriver.h>
+
+// ======================================================
+// OLED SETTINGS
+// ======================================================
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+#define OLED_MOSI 23
+#define OLED_CLK  18
+#define OLED_DC   13
+#define OLED_CS   14
+#define OLED_RST  4
+
+Adafruit_SSD1306 display(
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  &SPI,
+  OLED_DC,
+  OLED_RST,
+  OLED_CS
+);
+
+// ======================================================
+// PCA9685
+// ======================================================
+
+Adafruit_PWMServoDriver pwm(
+  0x40
+);
+
+// ======================================================
+// JOINT CHANNELS
+// ======================================================
+
+// P0 = J1
+// P1 = J2
+// P2 = J3
+// P3 = J4
+// P4 = J5
+
+#define J1 0
+#define J2 1
+#define J3 2
+#define J4 3
+#define J5 4
+
+// ======================================================
+// PWM RANGE
+// ======================================================
+
+#define SERVOMIN 100
+#define SERVOMAX 520
+
+// ======================================================
+// CALIBRATION OFFSETS
+// ======================================================
+
+int j1Offset = 90;
+int j2Offset = 95;
+int j3Offset = 90;
+int j4Offset = 90;
+int j5Offset = 90;
+
+// ======================================================
+// CURRENT ANGLES
+// ======================================================
+
+float currentJ1 = 0;
+float currentJ2 = 0;
+float currentJ3 = 0;
+float currentJ4 = 0;
+float currentJ5 = 0;
+
+// ======================================================
+// PID VALUES
+// ======================================================
+
+float Kp = 0.8;
+float Ki = 0.02;
+float Kd = 0.15;
+
+// ======================================================
+// ANGLE TO PWM
+// ======================================================
+
+int angleToPulse(
+  int angle
+) {
+
+  return map(
+           angle,
+           0,
+           180,
+           SERVOMIN,
+           SERVOMAX
+         );
+}
+
+// ======================================================
+// OLED DISPLAY
+// ======================================================
+
+void showOLED() {
+
+  display.clearDisplay();
+
+  display.setTextSize(1);
+
+  display.setTextColor(
+    SSD1306_WHITE
+  );
+
+  display.setCursor(0, 0);
+
+  display.print("J1:");
+  display.println((int)currentJ1);
+
+  display.print("J2:");
+  display.println((int)currentJ2);
+
+  display.print("J3:");
+  display.println((int)currentJ3);
+
+  display.print("J4:");
+  display.println((int)currentJ4);
+
+  display.print("J5:");
+  display.println((int)currentJ5);
+
+  display.display();
+}
+
+// ======================================================
+// GENERIC PID MOVE
+// ======================================================
+
+void moveJointPID(
+  int channel,
+  float &currentAngle,
+  int targetAngle,
+  int offset
+) {
+
+  float error = 0;
+
+  float previousError = 0;
+
+  float integral = 0;
+
+  float derivative = 0;
+
+  while (
+    abs(targetAngle - currentAngle) > 1
+  ) {
+
+    error =
+      targetAngle - currentAngle;
+
+    integral += error;
+
+    derivative =
+      error - previousError;
+
+    float output =
+      (Kp * error) +
+      (Ki * integral) +
+      (Kd * derivative);
+
+    // SPEED LIMIT
+
+    if (output > 2)
+      output = 2;
+
+    if (output < -2)
+      output = -2;
+
+    currentAngle += output;
+
+    int servoAngle =
+      currentAngle + offset;
+
+    servoAngle =
+      constrain(
+        servoAngle,
+        0,
+        180
+      );
+
+    pwm.setPWM(
+      channel,
+      0,
+      angleToPulse(servoAngle)
+    );
+
+    previousError =
+      error;
+
+    showOLED();
+
+    delay(20);
+  }
+
+  currentAngle =
+    targetAngle;
+}
+
+// ======================================================
+// MOVE ALL JOINTS
+// ======================================================
+
+void moveToPosition(
+  int a1,
+  int a2,
+  int a3,
+  int a4,
+  int a5
+) {
+
+  moveJointPID(
+    J1,
+    currentJ1,
+    a1,
+    j1Offset
+  );
+
+  moveJointPID(
+    J2,
+    currentJ2,
+    a2,
+    j2Offset
+  );
+
+  moveJointPID(
+    J3,
+    currentJ3,
+    a3,
+    j3Offset
+  );
+
+  moveJointPID(
+    J4,
+    currentJ4,
+    a4,
+    j4Offset
+  );
+
+  moveJointPID(
+    J5,
+    currentJ5,
+    a5,
+    j5Offset
+  );
+}
+
+// ======================================================
+// SETUP
+// ======================================================
+
+void setup() {
+
+  Serial.begin(9600);
+
+  // ==================================
+  // OLED SPI
+  // ==================================
+
+  SPI.begin(
+    OLED_CLK,
+    -1,
+    OLED_MOSI,
+    OLED_CS
+  );
+
+  // ==================================
+  // OLED START
+  // ==================================
+
+  if (
+    !display.begin(
+      SSD1306_SWITCHCAPVCC
+    )
+  ) {
+
+    while (true);
+  }
+
+  // ==================================
+  // I2C
+  // ==================================
+
+  Wire.begin(
+    21,
+    22
+  );
+
+  // ==================================
+  // PCA9685
+  // ==================================
+
+  pwm.begin();
+
+  pwm.setPWMFreq(50);
+
+  delay(1000);
+
+  // ==================================
+  // ALL JOINTS TO 0
+  // ==================================
+
+  moveToPosition(
+    0,
+    0,
+    0,
+    0,
+    0
+  );
+
+  delay(3000);
+
+  // ==================================
+  // MOVE TO P1
+  // +90,-45,-45,0,0
+  // ==================================
+
+  moveToPosition(
+    90,
+    -45,
+    -45,
+    0,
+    0
+  );
+
+  delay(3000);
+
+  // ==================================
+  // GRAB OBJECT
+  // ==================================
+
+  display.clearDisplay();
+
+  display.setTextSize(2);
+
+  display.setCursor(10, 20);
+
+  display.println("GRAB");
+
+  display.display();
+
+  delay(3000);
+
+  // ==================================
+  // MOVE TO P2
+  // 0,-45,-45,0,0
+  // ==================================
+
+  moveToPosition(
+    0,
+    -45,
+    -45,
+    0,
+    0
+  );
+
+  delay(3000);
+
+  // ==================================
+  // DROP OBJECT
+  // ==================================
+
+  display.clearDisplay();
+
+  display.setTextSize(2);
+
+  display.setCursor(10, 20);
+
+  display.println("DROP");
+
+  display.display();
+
+  delay(3000);
+
+  // ==================================
+  // RETURN HOME
+  // ==================================
+
+  moveToPosition(
+    0,
+    0,
+    0,
+    0,
+    0
+  );
+}
+
+// ======================================================
+// LOOP
+// ======================================================
+
+void loop() {
+
+}
