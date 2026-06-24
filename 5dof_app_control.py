@@ -1,3 +1,40 @@
+// ================================================================
+// PROJECT TITLE:
+// 5DOF ROBOTIC ARM WITH BLUETOOTH CONTROL AND OLED INTERFACE
+//
+// AUTHOR:
+// Sahil Thakur
+//
+// DEPARTMENT:
+// Electronics & Communication Engineering
+//
+// COLLEGE:
+// Jawaharlal Nehru Government Engineering College (JNGEC)
+//
+// DESCRIPTION:
+// This project implements a 5DOF robotic arm controlled
+// using an ESP32 microcontroller and PCA9685 servo driver.
+//
+// Features:
+// - Bluetooth Manual Control
+// - Automatic Pick and Place Operation
+// - OLED Status Display
+// - Smooth Motion Planning
+// - Emergency Stop Function
+// - Home Position Saving
+// - Gripper Control
+// - Wireless Operation
+//
+// HARDWARE USED:
+// - ESP32 Development Board
+// - PCA9685 Servo Driver
+// - 5 Servo Motors
+// - Servo Gripper
+// - 128x64 SPI OLED Display
+// - External Power Supply
+//
+// ================================================================
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
